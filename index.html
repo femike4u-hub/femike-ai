@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>femike AI Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 p-4 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white">f</div>
+                <h1 class="font-bold text-base text-white tracking-wide">femike AI</h1>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full text-xs">
+                <span id="serverDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                <span id="serverStatusText" class="text-slate-300">Connecting...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- App Content -->
+    <main class="max-w-6xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+        
+        <!-- Left: Upload & Actions (5 cols) -->
+        <div class="lg:col-span-5 space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <h2 class="font-semibold text-sm text-indigo-400 uppercase tracking-wider"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Media</h2>
+                
+                <label class="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-950/50 transition">
+                    <i class="fa-solid fa-file-audio text-2xl text-slate-400 mb-2"></i>
+                    <span class="text-xs text-slate-300">Select MP4, MP3, WAV file</span>
+                    <input type="file" id="mediaFile" accept="audio/*,video/*" class="hidden" onchange="updateFileName(event)">
+                </label>
+                <p id="fileName" class="text-xs text-indigo-400 truncate hidden"></p>
+
+                <button onclick="uploadAndTranscribe()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs rounded-xl shadow-lg transition">
+                    Transcribe File
+                </button>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <h2 class="font-semibold text-sm text-indigo-400 uppercase tracking-wider"><i class="fa-solid fa-link"></i> Import Link</h2>
+                <input type="url" id="linkUrl" placeholder="Paste YouTube link..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white">
+                <button onclick="processLink()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 font-semibold text-xs rounded-xl text-slate-200 transition">
+                    Process Link
+                </button>
+            </div>
+        </div>
+
+        <!-- Right: Transcript Output (7 cols) -->
+        <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 flex flex-col">
+            <div class="flex justify-between items-center">
+                <h2 class="font-semibold text-sm text-indigo-400 uppercase tracking-wider"><i class="fa-solid fa-file-lines"></i> Transcript</h2>
+                <button onclick="copyText()" class="text-xs text-slate-400 hover:text-white"><i class="fa-regular fa-copy"></i> Copy</button>
+            </div>
+            
+            <div id="loader" class="hidden text-center py-10 space-y-2">
+                <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p class="text-xs text-indigo-300" id="loadingMessage">Processing...</p>
+            </div>
+
+            <textarea id="transcriptText" readonly placeholder="Your transcribed text will appear here..." class="w-full flex-1 min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono resize-none focus:outline-none"></textarea>
+        </div>
+
+    </main>
+
+    <script>
+        // Update this line after deploying Render in Phase 2
+        let RENDER_URL = "https://femike-ai.onrender.com";
+
+        async function checkServer() {
+            const dot = document.getElementById('serverDot');
+            const text = document.getElementById('serverStatusText');
+            try {
+                const res = await fetch(`${RENDER_URL}/`);
+                if (res.ok) {
+                    dot.className = "w-2 h-2 rounded-full bg-emerald-400";
+                    text.textContent = "Backend Live";
+                }
+            } catch(e) {
+                dot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+                text.textContent = "Connecting to Render...";
+            }
+        }
+        setInterval(checkServer, 5000);
+        checkServer();
+
+        function updateFileName(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const p = document.getElementById('fileName');
+                p.textContent = file.name;
+                p.classList.remove('hidden');
+            }
+        }
+
+        async function uploadAndTranscribe() {
+            const fileInput = document.getElementById('mediaFile');
+            if (!fileInput.files[0]) return alert("Please choose a file first!");
+
+            showLoading("Extracting audio & transcribing with Deepgram...");
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const res = await fetch(`${RENDER_URL}/api/transcribe`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('transcriptText').value = data.transcript;
+                } else {
+                    alert("Error: " + data.detail);
+                }
+            } catch(e) {
+                alert("Failed to connect to backend server.");
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function processLink() {
+            const url = document.getElementById('linkUrl').value;
+            if (!url) return alert("Please enter a link!");
+
+            showLoading("Downloading link via yt-dlp...");
+            const formData = new FormData();
+            formData.append('url', url);
+
+            try {
+                const res = await fetch(`${RENDER_URL}/api/process-link`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (res.ok) {
+                    alert("Downloaded: " + data.title);
+                } else {
+                    alert("Error: " + data.detail);
+                }
+            } catch(e) {
+                alert("Server error.");
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function showLoading(msg) {
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('loadingMessage').textContent = msg;
+        }
+
+        function hideLoading() {
+            document.getElementById('loader').classList.add('hidden');
+        }
+
+        function copyText() {
+            const txt = document.getElementById('transcriptText');
+            txt.select();
+            document.execCommand('copy');
+            alert('Copied!');
+        }
+    </script>
+</body>
+</html>
